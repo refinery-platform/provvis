@@ -86,7 +86,7 @@ gulp.task('bump-version', () => {
 
 gulp.task('bundle', () => gulp
   .src(
-    config.globalPaths.src + config.sourcePaths.scripts + '/**/index.js', {
+    config.globalPaths.src + config.sourcePaths.js + '/**/index.js', {
       read: false
     }
   )
@@ -142,7 +142,7 @@ gulp.task('clean', () => gulp
 );
 
 gulp.task('lint', () => gulp
-  .src(config.globalPaths.src + config.sourcePaths.scripts + '/**/*.js')
+  .src(config.globalPaths.src + config.sourcePaths.js + '/**/*.js')
   .pipe(eslint({
     rules: {
       'no-console': 2
@@ -182,7 +182,7 @@ gulp.task('sass', () => gulp
 
 gulp.task('watch', () => {
   gulp.watch(
-    config.globalPaths.src + config.sourcePaths.scripts + '/**/*.js',
+    config.globalPaths.src + config.sourcePaths.js + '/**/*.js',
     ['bundle']
   );
   gulp.watch(

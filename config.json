@@ -20,7 +20,7 @@
     }
   },
   "sourcePaths": {
-    "scripts": "/scripts",
+    "js": "/js",
     "styles": "/styles"
   }
 }
