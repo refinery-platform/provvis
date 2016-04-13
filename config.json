@@ -1,0 +1,26 @@
+{
+  "browsers": [
+    "> 2%",
+    "last 2 versions",
+    "Firefox ESR",
+    "Explorer >= 9",
+    "Firefox >= 5"
+  ],
+  "globalPaths": {
+    "dist": "dist",
+    "src": "src"
+  },
+  "js": {
+    "bundles": {
+      "app": {
+        "banner": "Refinery's Provenance Visualization",
+        "name": "refinery-provvis",
+        "output": "refinery-provvis"
+      }
+    }
+  },
+  "sourcePaths": {
+    "scripts": "/scripts",
+    "styles": "/styles"
+  }
+}
