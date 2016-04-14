@@ -1443,8 +1443,9 @@ function drawTimelineView (_vis_) {
     .attr('id', an => 'tlAnalysisId-' + an.autoId)
     .classed('tlAnalysis', true)
     .attr('x1', an => timeLineGradientScale(parseISOTimeFormat(an.start)))
-    .attr('y1', an => an.children.size() >= 5 ? 10 :
-        parseInt(tlHeight - (tlHeight - 10) / 5 * an.children.size(), 10))
+    .attr('y1', an => (an.children.size() >= 5 ?
+      10 : parseInt(tlHeight - (tlHeight - 10) / 5 * an.children.size(), 10))
+    )
     .attr('x2', an => timeLineGradientScale(parseISOTimeFormat(an.start)))
     .attr('y2', tlHeight);
 
@@ -2783,8 +2784,8 @@ function updateAnalysisNodes () {
     .classed('an-node-type-icon', true)
     .style(
       'fill',
-      an => timeColorScale(parseISOTimeFormat(an.start)) < '#888888' ?
-        '#ffffff' : '#000000'
+      an => (timeColorScale(parseISOTimeFormat(an.start)) < '#888888' ?
+        '#ffffff' : '#000000')
     );
 
   aLabels.append('text')
@@ -2796,8 +2797,8 @@ function updateAnalysisNodes () {
     .attr('class', 'anLabel glyphNumeral')
     .style(
       'fill',
-      an => timeColorScale(parseISOTimeFormat(an.start)) < '#888888' ?
-        '#ffffff' : '#000000'
+      an => (timeColorScale(parseISOTimeFormat(an.start)) < '#888888' ?
+        '#ffffff' : '#000000')
     );
 
   /* Exit. */
@@ -3093,25 +3094,25 @@ function drawSubanalysisNodes () {
         .classed('san-node-type-icon', true)
         .style(
           'fill',
-          sann => timeColorScale(
+          sann => (timeColorScale(
             parseISOTimeFormat(sann.parent.start)
-          ) < '#888888' ? '#ffffff' : '#000000'
+          ) < '#888888' ? '#ffffff' : '#000000')
         );
 
       saLabels.append('text')
         .attr('transform',
           'translate(' + (1.0 * scaleFactor * vis.radius) + ',0.25)')
         .text(
-          d => d.wfUuid !== 'dataset' ?
+          d => (d.wfUuid !== 'dataset' ?
             d.children.values().filter(cn => cn.nodeType === 'dt').length :
-            d.children.size()
+            d.children.size())
         )
         .attr('class', 'sanLabel glyphNumeral')
         .style(
           'fill',
-          sann => timeColorScale(
+          sann => (timeColorScale(
             parseISOTimeFormat(sann.parent.start)
-          ) < '#888888' ? '#ffffff' : '#000000'
+          ) < '#888888' ? '#ffffff' : '#000000')
         );
     });
   });
@@ -3210,9 +3211,9 @@ function drawNodes () {
           .append('circle')
           .attr(
             'r',
-            dd => dd.nodeType === 'intermediate' ?
+            dd => (dd.nodeType === 'intermediate' ?
               3 * scaleFactor * vis.radius / 4 :
-              5 * scaleFactor * vis.radius / 6
+              5 * scaleFactor * vis.radius / 6)
           );
       } else {
         if (d.nodeType === 'special') {
@@ -3287,9 +3288,9 @@ function drawNodes () {
             .classed('stored-node-type-icon', true)
             .style(
               'fill',
-              n => timeColorScale(
+              n => (timeColorScale(
                 parseISOTimeFormat(n.parent.parent.start)
-                ) < '#888888' ? '#ffffff' : '#000000'
+                ) < '#888888' ? '#ffffff' : '#000000')
             );
         }
       });
@@ -3351,20 +3352,21 @@ function getABBoxCoords (an, _offset_) {
   }
 
   const minX = !an.hidden ? an.x : d3.min(an.children.values(),
-    san => !san.hidden ? an.x + san.x : d3.min(san.children.values(),
-      cn => !cn.hidden ? an.x + san.x + cn.x : an.x)
+    san => (!san.hidden ? an.x + san.x : d3.min(
+      san.children.values(), cn => (!cn.hidden ? an.x + san.x + cn.x : an.x)
+    ))
   );
   const maxX = !an.hidden ? an.x : d3.max(an.children.values(),
-    san => !san.hidden ? an.x + san.x : d3.max(san.children.values(),
-      cn => !cn.hidden ? an.x + san.x + cn.x : an.x)
+    san => (!san.hidden ? an.x + san.x : d3.max(san.children.values(),
+      cn => (!cn.hidden ? an.x + san.x + cn.x : an.x)))
   );
   const minY = !an.hidden ? an.y : d3.min(an.children.values(),
-    san => !san.hidden ? an.y + san.y : d3.min(san.children.values(),
-      cn => !cn.hidden ? an.y + san.y + cn.y : an.y)
+    san => (!san.hidden ? an.y + san.y : d3.min(san.children.values(),
+      cn => (!cn.hidden ? an.y + san.y + cn.y : an.y)))
   );
   const maxY = !an.hidden ? an.y : d3.max(an.children.values(),
-    san => !san.hidden ? an.y + san.y : d3.max(san.children.values(),
-      cn => !cn.hidden ? an.y + san.y + cn.y : an.y)
+    san => (!san.hidden ? an.y + san.y : d3.max(san.children.values(),
+      cn => (!cn.hidden ? an.y + san.y + cn.y : an.y)))
   );
 
   return {
@@ -4163,9 +4165,9 @@ function drawColorcodingView () {
         aNode.selectAll('.anLabel, .anwfLabel, .an-node-type-icon')
           .style(
             'fill',
-            an => timeColorScale(
+            an => (timeColorScale(
               parseISOTimeFormat(an.start)
-            ) < '#888888' ? '#ffffff' : '#000000'
+            ) < '#888888' ? '#ffffff' : '#000000')
           );
 
         saNode.select('.glyph').selectAll('rect, circle')
@@ -4177,9 +4179,9 @@ function drawColorcodingView () {
         saNode.selectAll('.sanLabel, .sanwfLabel, .san-node-type-icon')
           .style(
             'fill',
-            san => timeColorScale(
+            san => (timeColorScale(
               parseISOTimeFormat(san.parent.start)
-            ) < '#888888' ? '#ffffff' : '#000000'
+            ) < '#888888' ? '#ffffff' : '#000000')
           );
 
         node.select('.glyph').selectAll('rect, circle')
@@ -4191,9 +4193,9 @@ function drawColorcodingView () {
         node.selectAll('.stored-node-type-icon')
           .style(
             'fill',
-            n => timeColorScale(
+            n => (timeColorScale(
               parseISOTimeFormat(n.parent.parent.start)
-            ) < '#888888' ? '#ffffff' : '#000000'
+            ) < '#888888' ? '#ffffff' : '#000000')
           );
         break;
       case 'workflow': {

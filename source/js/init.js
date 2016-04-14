@@ -203,7 +203,7 @@ function markSubanalyses () {
    * @param n Current node.
    * @param subanalysis Current subanalysis.
    */
-  let traverseDataset = function (n, _currentSubAnalysis_) {
+  function traverseDataset (n, _currentSubAnalysis_) {
     let currentSubAnalysis = _currentSubAnalysis_;
 
     n.subanalysis = currentSubAnalysis;
@@ -228,7 +228,7 @@ function markSubanalyses () {
       }
       traverseDataset(sn, currentSubAnalysis);
     });
-  };
+  }
 
   /* For each subanalysis in the dataset. */
   iNodes.forEach(n => {
