@@ -101,13 +101,16 @@ gulp.task('bundle', () => gulp
       babel({
         babelrc: false,
         exclude: 'node_modules/**',
-        presets: 'es2015-rollup'
+        presets: 'es2015-rollup',
+        // There is no need for Babel to make anything compact; that's what
+        // Uglify is good for.
+        compact: false
       })
     ],
     sourceMap: !production
   })))
   .pipe(rename(bundlePath => {
-    bundlePath.basename = config.js.bundles[bundlePath.dirname].output;
+    bundlePath.basename = config.js.bundles.app.output;
     return bundlePath;
   }))
   .pipe(flatten())
@@ -147,8 +150,8 @@ gulp.task('lint', () => gulp
 );
 
 gulp.task('sass', () => gulp
-  .src(config.globalPaths.src + config.sourcePaths.styles + '/main.scss')
-  .pipe(rename('listGraph.css'))
+  .src(config.globalPaths.src + config.sourcePaths.styles + '/index.scss')
+  .pipe(rename('refinery-prov-vis.css'))
   .pipe(flatten())
   .pipe(sass().on('error', sass.logError))
   .pipe(gulp.dest(config.globalPaths.dist))
