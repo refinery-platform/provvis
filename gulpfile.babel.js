@@ -10,7 +10,6 @@ import gulpIf from 'gulp-if';
 import gulpUtil from 'gulp-util';
 import ignore from 'gulp-ignore';
 import notify from 'gulp-notify';
-import path from 'path';
 import plumber from 'gulp-plumber';
 import rename from 'gulp-rename';
 import rollup from './scripts/gulp-rollup.js';
@@ -19,6 +18,7 @@ import sass from 'gulp-sass';
 import semver from 'semver';
 import sourcemaps from 'gulp-sourcemaps';
 import uglify from 'gulp-uglify';
+import rollupJson from 'rollup-plugin-json';
 
 import * as config from './config.json';
 import * as packageJson from './package.json';
@@ -86,20 +86,18 @@ gulp.task('bump-version', () => {
 
 gulp.task('bundle', () => gulp
   .src(
-    config.globalPaths.src + config.sourcePaths.js + '/**/index.js', {
+    config.globalPaths.src + config.sourcePaths.js + '/index.js', {
       read: false
     }
   )
   .pipe(sourcemaps.init())
-  .pipe(rollup(file => ({
-    banner: '/* Copyright ' + packageJson.author + ': ' + config.js.bundles[
-      path.dirname(path.relative(file.base, file.path))
-    ].banner + ' */',
+  .pipe(rollup(() => ({
+    banner: '/* Copyright ' + packageJson.author + ': ' +
+      config.js.bundles.app.banner + ' */',
     format: 'iife',
-    moduleName: config.js.bundles[
-        path.dirname(path.relative(file.base, file.path))
-      ].name,
+    moduleName: config.js.bundles.app.name,
     plugins: [
+      rollupJson(),
       babel({
         babelrc: false,
         exclude: 'node_modules/**',
@@ -143,11 +141,7 @@ gulp.task('clean', () => gulp
 
 gulp.task('lint', () => gulp
   .src(config.globalPaths.src + config.sourcePaths.js + '/**/*.js')
-  .pipe(eslint({
-    rules: {
-      'no-console': 2
-    }
-  }))
+  .pipe(eslint())
   .pipe(eslint.format())
   .pipe(eslint.failOnError())
 );
