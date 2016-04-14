@@ -14,8 +14,8 @@
     "bundles": {
       "app": {
         "banner": "Refinery's Provenance Visualization",
-        "name": "refinery-provvis",
-        "output": "refinery-provvis"
+        "name": "refineryProvVis",
+        "output": "refinery-prov-vis"
       }
     }
   },
