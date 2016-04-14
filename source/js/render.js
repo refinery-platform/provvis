@@ -19,6 +19,21 @@ import {
 } from './helpers';
 import * as models from './models';
 
+// Internal pure functions
+import tooltip from './render/tooltip';
+import showTooltip from './render/tooltip-show';
+import hideTooltip from './render/tooltip-hide';
+import getVisibleNodeCoords from './render/get-visible-node-coords';
+import getABBoxCoords from './render/get-ab-box-coords';
+import concatDomClassElements from './render/concat-dom-class-elements';
+import initDoiFilterComponent from './render/init-doi-filter-component';
+import initDoiTimeComponent from './render/init-doi-time-component';
+import getWFBBoxCoords from './render/get-wfb-box-coords';
+import dagreLayerLayout from './render/dagre-layer-layout';
+import applyDragBehavior from './render/apply-drag-behavior';
+import drawStraightLink from './render/draw-straight-link';
+import dragStart from './render/drag-start';
+
 /**
  * Module for render.
  */
@@ -78,128 +93,34 @@ let doiDiffScale = Object.create(null);
 
 let doiAutoUpdate = false;
 
-/* Simple tooltips by NG. */
-const tooltip = d3.select('body')
-  .append('div')
-  .attr('class', 'refinery-tooltip')
-  .style('position', 'absolute')
-  .style('z-index', '10')
-  .style('visibility', 'hidden');
-
 /**
- * For a node, get first visible parent node coords.
- * @param curN Node to start traversing to its parents.
- * @returns {{x: number, y: number}} X and y coordinates of the first visible
- * parent node.
+ * Update filtered links.
  */
-function getVisibleNodeCoords (_curN_) {
-  let curN = _curN_;
-  let x = 0;
-  let y = 0;
+function updateLinkFilter () {
+  saLink.classed('filteredLink', false);
 
-  while (curN.hidden && !(curN instanceof models.Layer)) {
-    curN = curN.parent;
-  }
-
-  if (curN instanceof models.Layer) {
-    x = curN.x;
-    y = curN.y;
-  } else {
-    while (!(curN instanceof models.Layer)) {
-      x += curN.x;
-      y += curN.y;
-      curN = curN.parent;
+  saNode.each(san => {
+    if (!san.filtered) {
+      san.links.values().forEach(l => {
+        d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+          .classed('filteredLink', false);
+        if (filterAction === 'blend') {
+          d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+            .classed('blendedLink', true);
+        } else {
+          d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+            .classed('blendedLink', false);
+        }
+      });
+    } else {
+      san.links.values().forEach(l => {
+        d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+          .classed({
+            filteredLink: true,
+            blendedLink: false
+          });
+      });
     }
-  }
-
-  return { x, y };
-}
-
-/**
- * Update link through translation while dragging or on dragend.
- * @param n Node object element.
- */
-function updateLink (n) {
-  const predLinks = d3.map();
-  const succLinks = d3.map();
-
-  /* Get layer and/or analysis links. */
-  switch (n.nodeType) {
-    case 'layer':
-      n.predLinks.values().forEach(pl => {
-        predLinks.set(pl.autoId, pl);
-      });
-      n.succLinks.values().forEach(sl => {
-        succLinks.set(sl.autoId, sl);
-      });
-      n.children.values().forEach(an => {
-        an.predLinks.values().forEach(pl => {
-          predLinks.set(pl.autoId, pl);
-        });
-        an.succLinks.values().forEach(sl => {
-          succLinks.set(sl.autoId, sl);
-        });
-      });
-      break;
-    case 'analysis':
-      n.predLinks.values().forEach(pl => {
-        predLinks.set(pl.autoId, pl);
-      });
-      n.succLinks.values().forEach(sl => {
-        succLinks.set(sl.autoId, sl);
-      });
-      break;
-  }
-
-  /* Get input links and update coordinates for x2 and y2. */
-  predLinks.values().forEach(l => {
-    d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-      .classed('link-transition', true)
-      .transition()
-      .duration(draggingActive ? 0 : nodeLinkTransitionTime)
-      .attr('d', ll => {
-        const srcCoords = getVisibleNodeCoords(ll.source);
-        const tarCoords = getVisibleNodeCoords(ll.target);
-
-        if (linkStyle === 'bezier1') {
-          return drawBezierLink(ll, srcCoords.x, srcCoords.y, tarCoords.x,
-            tarCoords.y);
-        }
-        return drawStraightLink(
-          ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
-        );
-      });
-
-    setTimeout(() => {
-      d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-        .classed('link-transition', false);
-    }, nodeLinkTransitionTime);
-  });
-
-  /* Get output links and update coordinates for x1 and y1. */
-  succLinks.values().forEach(l => {
-    d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-      .classed('link-transition', true)
-      .transition()
-      .duration(draggingActive ? 0 : nodeLinkTransitionTime)
-      .attr('d', ll => {
-        const tarCoords = getVisibleNodeCoords(ll.target);
-        const srcCoords = getVisibleNodeCoords(ll.source);
-
-        if (linkStyle === 'bezier1') {
-          return drawBezierLink(
-            ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
-          );
-        }
-        return drawStraightLink(
-          ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
-        );
-      });
-
-    setTimeout(() => {
-      d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-        .classed('link-transition', false);
-    }, nodeLinkTransitionTime);
   });
 }
 
@@ -300,33 +221,90 @@ function updateNodeFilter () {
 }
 
 /**
- * Update filtered links.
+ * Update link through translation while dragging or on dragend.
+ * @param n Node object element.
  */
-function updateLinkFilter () {
-  saLink.classed('filteredLink', false);
+function updateLink (n) {
+  const predLinks = d3.map();
+  const succLinks = d3.map();
 
-  saNode.each(san => {
-    if (!san.filtered) {
-      san.links.values().forEach(l => {
-        d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-          .classed('filteredLink', false);
-        if (filterAction === 'blend') {
-          d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-            .classed('blendedLink', true);
-        } else {
-          d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-            .classed('blendedLink', false);
+  /* Get layer and/or analysis links. */
+  switch (n.nodeType) {
+    case 'layer':
+      n.predLinks.values().forEach(pl => {
+        predLinks.set(pl.autoId, pl);
+      });
+      n.succLinks.values().forEach(sl => {
+        succLinks.set(sl.autoId, sl);
+      });
+      n.children.values().forEach(an => {
+        an.predLinks.values().forEach(pl => {
+          predLinks.set(pl.autoId, pl);
+        });
+        an.succLinks.values().forEach(sl => {
+          succLinks.set(sl.autoId, sl);
+        });
+      });
+      break;
+    case 'analysis':
+      n.predLinks.values().forEach(pl => {
+        predLinks.set(pl.autoId, pl);
+      });
+      n.succLinks.values().forEach(sl => {
+        succLinks.set(sl.autoId, sl);
+      });
+      break;
+  }
+
+  /* Get input links and update coordinates for x2 and y2. */
+  predLinks.values().forEach(l => {
+    d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+      .classed('link-transition', true)
+      .transition()
+      .duration(draggingActive ? 0 : nodeLinkTransitionTime)
+      .attr('d', ll => {
+        const srcCoords = getVisibleNodeCoords(ll.source);
+        const tarCoords = getVisibleNodeCoords(ll.target);
+
+        if (linkStyle === 'bezier1') {
+          return drawBezierLink(ll, srcCoords.x, srcCoords.y, tarCoords.x,
+            tarCoords.y);
         }
+        return drawStraightLink(
+          ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
+        );
       });
-    } else {
-      san.links.values().forEach(l => {
-        d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
-          .classed({
-            filteredLink: true,
-            blendedLink: false
-          });
+
+    setTimeout(() => {
+      d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+        .classed('link-transition', false);
+    }, nodeLinkTransitionTime);
+  });
+
+  /* Get output links and update coordinates for x1 and y1. */
+  succLinks.values().forEach(l => {
+    d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+      .classed('link-transition', true)
+      .transition()
+      .duration(draggingActive ? 0 : nodeLinkTransitionTime)
+      .attr('d', ll => {
+        const tarCoords = getVisibleNodeCoords(ll.target);
+        const srcCoords = getVisibleNodeCoords(ll.source);
+
+        if (linkStyle === 'bezier1') {
+          return drawBezierLink(
+            ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
+          );
+        }
+        return drawStraightLink(
+          ll, srcCoords.x, srcCoords.y, tarCoords.x, tarCoords.y
+        );
       });
-    }
+
+    setTimeout(() => {
+      d3.selectAll('#linkId-' + l.autoId + ', #hLinkId-' + l.autoId)
+        .classed('link-transition', false);
+    }, nodeLinkTransitionTime);
   });
 }
 
@@ -421,7 +399,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
       d3.select('#BBoxId-' + d.autoId).classed('hiddenBBox', false);
 
       /* Update. */
-      wfBBoxCoords = getWFBBoxCoords(d, 0);
+      wfBBoxCoords = getWFBBoxCoords(d, cell, 0);
       d.x = 0;
       updateLink(d.parent);
       updateNode(d3.select('#gNodeId-' + d.autoId), d, d.x, d.y);
@@ -435,7 +413,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
       });
 
       /* Adjust analysis bounding box. */
-      anBBoxCoords = getABBoxCoords(d.parent, 0);
+      anBBoxCoords = getABBoxCoords(d.parent, cell, 0);
       d3.selectAll('#BBoxId-' + d.parent.autoId + ', #aBBClipId-' +
         d.parent.autoId).selectAll('rect')
         .attr('width', anBBoxCoords.x.max - anBBoxCoords.x.min)
@@ -452,7 +430,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
       updateNode(d3.select('#gNodeId-' + d.autoId), d, d.x, d.y);
     } else if (d.nodeType === 'analysis') {
       /* Adjust analysis bounding box. */
-      anBBoxCoords = getABBoxCoords(d, 0);
+      anBBoxCoords = getABBoxCoords(d, cell, 0);
       d3.select('#BBoxId-' + d.autoId).select('rect')
         .attr('width', anBBoxCoords.x.max - anBBoxCoords.x.min)
         .attr('height', anBBoxCoords.y.max - anBBoxCoords.y.min);
@@ -478,7 +456,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
           });
 
           /* Adjust bounding box. */
-          anBBoxCoords = getABBoxCoords(an, 0);
+          anBBoxCoords = getABBoxCoords(an, cell, 0);
           d3.selectAll('#BBoxId-' + an.autoId + ', #aBBClipId-' + an.autoId)
             .select('rect')
             .attr('width', cell.width)
@@ -518,7 +496,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
       /* Collapse workflow. */
       if (d.hidden === false) {
         /* Shift sibling subanalyses vertical. */
-        wfBBoxCoords = getWFBBoxCoords(d.parent, 0);
+        wfBBoxCoords = getWFBBoxCoords(d.parent, cell, 0);
         siblings = d.parent.parent.children.values().filter(
           san => san !== d.parent && san.y > d.parent.y
         );
@@ -533,7 +511,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
             .filter(san => san !== d.parent)
             .some(san => san.hidden)
         ) {
-          anBBoxCoords = getABBoxCoords(d.parent.parent, 0);
+          anBBoxCoords = getABBoxCoords(d.parent.parent, cell, 0);
           d.parent.x = (anBBoxCoords.x.max - anBBoxCoords.x.min) / 2 -
             vis.cell.width / 2;
           updateNode(d3.select('#gNodeId-' + d.parent.autoId),
@@ -631,7 +609,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
         d.parent.parent, d.parent.parent.x, d.parent.parent.y);
 
       /* Compute bounding box for analysis child nodes. */
-      anBBoxCoords = getABBoxCoords(d.parent.parent, 0);
+      anBBoxCoords = getABBoxCoords(d.parent.parent, cell, 0);
 
       /* Adjust analysis bounding box. */
       d3.selectAll('#BBoxId-' + d.parent.parent.autoId + ', #aBBClipId-' +
@@ -643,7 +621,7 @@ function handleCollapseExpandNode (d, keyStroke, _trigger_) {
        adjust bounding box and clippath. */
       if (!d.parent.parent.children.values().some(san => san.hidden)) {
         /* Compute bounding box for analysis child nodes. */
-        anBBoxCoords = getABBoxCoords(d.parent.parent, 0);
+        anBBoxCoords = getABBoxCoords(d.parent.parent, cell, 0);
 
         /* Adjust analysis bounding box. */
         d3.select('#BBoxId-' + d.parent.parent.autoId).select('rect')
@@ -776,25 +754,6 @@ function updateNodeDoi () {
 }
 
 /**
- * Make tooltip visible and align it to the events position.
- * @param label Inner html code appended to the tooltip.
- * @param event E.g. mouse event.
- */
-function showTooltip (label, event) {
-  tooltip.html(label);
-  tooltip.style('visibility', 'visible');
-  tooltip.style('top', (event.pageY + 10) + 'px');
-  tooltip.style('left', (event.pageX + 10) + 'px');
-}
-
-/**
- * Hide tooltip.
- */
-function hideTooltip () {
-  tooltip.style('visibility', 'hidden');
-}
-
-/**
  * Path generator for bezier link.
  * @param l Link.
  * @param srcX Source x coordinate.
@@ -828,7 +787,7 @@ function drawBezierLink (l, srcX, srcY, tarX, tarY) {
       if (l.source instanceof models.Layer && l.source.hidden) {
         hLineSrc = srcX + vis.cell.width / 2;
       } else {
-        hLineSrc = getABBoxCoords(curN, 0).x.max - vis.cell.width / 2;
+        hLineSrc = getABBoxCoords(curN, cell, 0).x.max - vis.cell.width / 2;
       }
 
       /* LayoutCols provides the maximum width of any potential expanded node
@@ -836,8 +795,8 @@ function drawBezierLink (l, srcX, srcY, tarX, tarY) {
        * as offset and added as horizontal line to the link. */
       layoutCols.values().forEach(c => {
         if (c.nodes.indexOf(curN.autoId) !== -1) {
-          const curWidth = getABBoxCoords(curN, 0).x.max -
-            getABBoxCoords(curN, 0).x.min;
+          const curWidth = getABBoxCoords(curN, cell, 0).x.max -
+            getABBoxCoords(curN, cell, 0).x.min;
           const offset = (c.width - curWidth) / 2 + vis.cell.width / 2;
           if (curWidth < c.width) {
             hLineSrc = srcX + offset;
@@ -864,28 +823,6 @@ function drawBezierLink (l, srcX, srcY, tarX, tarY) {
 }
 
 /**
- * Path generator for straight link.
- * @param l Link.
- * @param srcX Source x coordinate.
- * @param srcY Source y coordinate.
- * @param tarX Target x coordinate.
- * @param tarY Target y coordinate.
- * @returns {*} Path for link.
- */
-function drawStraightLink (l, srcX, srcY, tarX, tarY) {
-  let pathSegment = ' M' + srcX + ',' + srcY;
-  pathSegment = pathSegment.concat(' L' + tarX + ',' + tarY);
-  return pathSegment;
-}
-
-/**
- * Drag start listener support for nodes.
- */
-function dragStart () {
-  d3.event.sourceEvent.stopPropagation();
-}
-
-/**
  * Drag listener.
  * @param n Node object.
  */
@@ -893,7 +830,7 @@ function dragging (n) {
   const self = d3.select(this);
 
   /* While dragging, hide tooltips. */
-  hideTooltip();
+  hideTooltip(tooltip);
 
   const deltaY = d3.event.y - n.y;
 
@@ -909,8 +846,8 @@ function dragging (n) {
 
   if (n instanceof models.Layer) {
     n.children.values().forEach(an => {
-      an.x = n.x - (getABBoxCoords(an, 0).x.max -
-        getABBoxCoords(an, 0).x.min) / 2 + vis.cell.width / 2;
+      an.x = n.x - (getABBoxCoords(an, cell, 0).x.max -
+        getABBoxCoords(an, cell, 0).x.min) / 2 + vis.cell.width / 2;
       an.y += deltaY;
       updateNode(d3.select('#gNodeId-' + an.autoId), an, an.x, an.y);
       updateLink(an);
@@ -957,22 +894,6 @@ function dragEnd (n) {
       draggingActive = false;
     }, 200);
   }
-}
-
-/**
- * Sets the drag events for nodes.
- * @param nodeType The dom nodeset to allow dragging.
- */
-function applyDragBehavior (domDragSet) {
-  /* Drag and drop node enabled. */
-  const drag = d3.behavior.drag()
-    .origin(d => d)
-    .on('dragstart', dragStart)
-    .on('drag', dragging)
-    .on('dragend', dragEnd);
-
-  /* Invoke dragging behavior on nodes. */
-  domDragSet.call(drag);
 }
 
 /* TODO: Update to incorporate facet filtering and adjust link visibility
@@ -2932,7 +2853,7 @@ function drawSubanalysisNodes () {
       drawSubanalysisLinks(san);
 
       /* Compute bounding box for subanalysis child nodes. */
-      const saBBoxCoords = getWFBBoxCoords(san, 0);
+      const saBBoxCoords = getWFBBoxCoords(san, cell, 0);
 
       /* Add a clip-path to restrict labels within the cell area. */
       self.append('defs')
@@ -3300,147 +3221,6 @@ function drawNodes () {
   node = d3.selectAll('.node');
 }
 
-/**
- * Compute bounding box for child nodes.
- * @param n BaseNode.
- * @param offset Cell offset.
- * @returns {{x: {min: *, max: *}, y: {min: *, max: *}}} Min and
- * max x, y coords.
- */
-function getWFBBoxCoords (n, offset) {
-  let minX;
-  let minY;
-  let maxX;
-  let maxY = 0;
-
-  if (n.children.empty() || !n.hidden) {
-    minX = (-cell.width / 2 + offset);
-    maxX = (cell.width / 2 - offset);
-    minY = (-cell.width / 2 + offset);
-    maxY = (cell.width / 2 - offset);
-  } else {
-    minX = d3.min(n.children.values(), d => d.x - cell.width / 2 + offset);
-    maxX = d3.max(n.children.values(), d => d.x + cell.width / 2 - offset);
-    minY = d3.min(n.children.values(), d => d.y - cell.height / 2 + offset);
-    maxY = d3.max(n.children.values(), d => d.y + cell.height / 2 - offset);
-  }
-
-  return {
-    x: {
-      min: minX,
-      max: maxX
-    },
-    y: {
-      min: minY,
-      max: maxY
-    }
-  };
-}
-
-/**
- * Compute bounding box for expanded analysis nodes.
- * @param an Analysis node.
- * @param offset Cell offset.
- * @returns {{x: {min: number, max: number}, y: {min: number, max: number}}}
- * Min and max x, y coords.
- */
-function getABBoxCoords (an, _offset_) {
-  let offset = _offset_;
-
-  if (!offset) {
-    offset = 0;
-  }
-
-  const minX = !an.hidden ? an.x : d3.min(an.children.values(),
-    san => (!san.hidden ? an.x + san.x : d3.min(
-      san.children.values(), cn => (!cn.hidden ? an.x + san.x + cn.x : an.x)
-    ))
-  );
-  const maxX = !an.hidden ? an.x : d3.max(an.children.values(),
-    san => (!san.hidden ? an.x + san.x : d3.max(san.children.values(),
-      cn => (!cn.hidden ? an.x + san.x + cn.x : an.x)))
-  );
-  const minY = !an.hidden ? an.y : d3.min(an.children.values(),
-    san => (!san.hidden ? an.y + san.y : d3.min(san.children.values(),
-      cn => (!cn.hidden ? an.y + san.y + cn.y : an.y)))
-  );
-  const maxY = !an.hidden ? an.y : d3.max(an.children.values(),
-    san => (!san.hidden ? an.y + san.y : d3.max(san.children.values(),
-      cn => (!cn.hidden ? an.y + san.y + cn.y : an.y)))
-  );
-
-  return {
-    x: {
-      min: minX + offset,
-      max: maxX + cell.width - offset
-    },
-    y: {
-      min: minY + offset,
-      max: maxY + cell.height - offset
-    }
-  };
-}
-
-/**
- * Dagre layout including layer nodes.
- * @param graph The provenance graph.
- */
-function dagreLayerLayout (graph) {
-  const g = new dagre.graphlib.Graph();
-
-  g.setGraph({
-    rankdir: 'LR',
-    nodesep: 0,
-    edgesep: 0,
-    ranksep: 0,
-    marginx: 0,
-    marginy: 0
-  });
-
-  g.setDefaultEdgeLabel({});
-
-  let curWidth = 0;
-  let curHeight = 0;
-
-  graph.lNodes.values().forEach(ln => {
-    curWidth = vis.cell.width;
-    curHeight = vis.cell.height;
-
-    g.setNode(ln.autoId, {
-      label: ln.autoId,
-      width: curWidth,
-      height: curHeight
-    });
-  });
-
-  graph.lLinks.values().forEach(l => {
-    g.setEdge(l.source.autoId, l.target.autoId, {
-      minlen: 1,
-      weight: 1,
-      width: 0,
-      height: 0,
-      labelpos: 'r',
-      labeloffset: 0
-    });
-  });
-
-  dagre.layout(g);
-
-  const dlLNodes = d3.entries(g._nodes);
-  graph.lNodes.values().forEach(ln => {
-    curWidth = vis.cell.width;
-    curHeight = vis.cell.height;
-
-    ln.x = dlLNodes
-      .filter(d => d.key === ln.autoId.toString())[0].value.x - curWidth / 2;
-
-    ln.y = dlLNodes
-      .filter(d => d.key === ln.autoId.toString())[0].value.y - curHeight / 2;
-
-    updateNodeAndLink(ln, d3.select('#gNodeId-' + ln.autoId));
-  });
-}
-
 /* TODO: Code cleanup. */
 /**
  * Dynamic Dagre layout.
@@ -3494,7 +3274,7 @@ function dagreDynamicLayerLayout (graph) {
             exNum++;
             an.x = an.parent.x;
             an.y = accY;
-            accY += (getABBoxCoords(an, 0).y.max - getABBoxCoords(an, 0).y.min);
+            accY += (getABBoxCoords(an, cell, 0).y.max - getABBoxCoords(an, cell, 0).y.min);
 
             updateNodeAndLink(an, d3.select('#gNodeId-' + an.autoId));
             d3.select('#BBoxId-' + ln.autoId).classed('hiddenBBox', false);
@@ -3519,7 +3299,7 @@ function dagreDynamicLayerLayout (graph) {
         .filter(an => an.filtered || filterAction === 'blend')
         .forEach(an => {
           if (an.exaggerated) {
-            anBBoxCoords = getABBoxCoords(an, 0);
+            anBBoxCoords = getABBoxCoords(an, cell, 0);
             if (anBBoxCoords.x.max - anBBoxCoords.x.min > accWidth) {
               accWidth = anBBoxCoords.x.max - anBBoxCoords.x.min;
             }
@@ -3548,7 +3328,7 @@ function dagreDynamicLayerLayout (graph) {
       ln.children.values()
         .filter(an => an.filtered || filterAction === 'blend')
         .forEach(an => {
-          anBBoxCoords = getABBoxCoords(an, 0);
+          anBBoxCoords = getABBoxCoords(an, cell, 0);
           curWidth = anBBoxCoords.x.max - anBBoxCoords.x.min;
           curHeight = anBBoxCoords.y.max - anBBoxCoords.y.min;
           g.setNode(an.autoId, {
@@ -3621,7 +3401,7 @@ function dagreDynamicLayerLayout (graph) {
         .filter(an => an.filtered || filterAction === 'blend')
         .forEach(an => {
           if (an.exaggerated) {
-            anBBoxCoords = getABBoxCoords(an, 0);
+            anBBoxCoords = getABBoxCoords(an, cell, 0);
             if (anBBoxCoords.x.max - anBBoxCoords.x.min > accWidth) {
               accWidth = anBBoxCoords.x.max - anBBoxCoords.x.min;
             }
@@ -3638,14 +3418,14 @@ function dagreDynamicLayerLayout (graph) {
         .filter(an => an.filtered || filterAction === 'blend')
         .sort((a, b) => a.y - b.y)
         .forEach(an => {
-          anBBoxCoords = getABBoxCoords(an, 0);
+          anBBoxCoords = getABBoxCoords(an, cell, 0);
           curWidth = anBBoxCoords.x.max - anBBoxCoords.x.min;
           an.x = ln.x - curWidth / 2 + vis.cell.width / 2;
 
           if (an.exaggerated) {
             an.y = accY;
-            accY += (getABBoxCoords(an, 0).y.max -
-            getABBoxCoords(an, 0).y.min);
+            accY += (getABBoxCoords(an, cell, 0).y.max -
+            getABBoxCoords(an, cell, 0).y.min);
           } else {
             an.y = an.parent.y;
           }
@@ -3658,7 +3438,7 @@ function dagreDynamicLayerLayout (graph) {
           )[0];
 
         if (an && typeof an !== 'undefined') {
-          anBBoxCoords = getABBoxCoords(an, 0);
+          anBBoxCoords = getABBoxCoords(an, cell, 0);
           accWidth = anBBoxCoords.x.max - anBBoxCoords.x.min;
           accHeight = anBBoxCoords.y.max - anBBoxCoords.y.min;
 
@@ -3735,7 +3515,7 @@ function fitGraphToWindow (transitionTime) {
   const max = [0, 0];
 
   vis.graph.aNodes.forEach(an => {
-    const anBBox = getABBoxCoords(an, 0);
+    const anBBox = getABBoxCoords(an, cell, 0);
     if (anBBox.x.min < min[0]) {
       min[0] = anBBox.x.min;
     }
@@ -4482,7 +4262,7 @@ function handleTooltips () {
     d.attributes.forEach((key, value) => {
       ttStr += createHTMLKeyValuePair(key, value) + '<br>';
     });
-    showTooltip(ttStr, event);
+    showTooltip(tooltip, ttStr, event);
 
     d.parent.parent.parent.children.values().forEach(sibling => {
       d3.select('#BBoxId-' + sibling.autoId).style('stroke-opacity', 0.3);
@@ -4517,10 +4297,10 @@ function handleTooltips () {
       ttStr += createHTMLKeyValuePair(key, value) + '<br>';
     });
     d3.select('#BBoxId-' + d.parent.autoId).classed('mouseoverBBox', true);
-    showTooltip(ttStr, event);
+    showTooltip(tooltip, ttStr, event);
   }).on('mouseout', d => {
     const self = d3.select(this);
-    hideTooltip();
+    hideTooltip(tooltip);
 
     d.parent.parent.parent.children.values().forEach(sibling => {
       d3.select('#BBoxId-' + sibling.autoId).style('stroke-opacity', 0.0);
@@ -4660,20 +4440,20 @@ function handleTooltips () {
 
   /* On mouseover timeline analysis lines. */
   d3.selectAll('.tlAnalysis').on('mouseover', an => {
-    showTooltip(
+    showTooltip(tooltip,
       createHTMLKeyValuePair('Created', parseISOTimeFormat(an.start)) +
       '<br>' +
       createHTMLKeyValuePair('Workflow', getWfNameByNode(an)) +
       '<br>', event);
     d3.select('#BBoxId-' + an.autoId).classed('mouseoverTlBBox', true);
   }).on('mousemove', an => {
-    showTooltip(
+    showTooltip(tooltip,
       createHTMLKeyValuePair('Created', parseISOTimeFormat(an.start)) +
       '<br>' +
       createHTMLKeyValuePair('Workflow', getWfNameByNode(an)) +
       '<br>', event);
   }).on('mouseout', an => {
-    hideTooltip();
+    hideTooltip(tooltip);
     d3.select('#BBoxId-' + an.autoId).classed('mouseoverTlBBox', false);
   });
 }
@@ -4724,7 +4504,7 @@ function showAllWorkflows () {
       an.children.values()
       .sort((a, b) => a.y - b.y)
       .forEach(san => {
-        const wfBBoxCoords = getWFBBoxCoords(san, 0);
+        const wfBBoxCoords = getWFBBoxCoords(san, cell, 0);
         san.y = yOffset;
         yOffset += (wfBBoxCoords.y.max - wfBBoxCoords.y.min);
         san.x = 0;
@@ -4733,7 +4513,7 @@ function showAllWorkflows () {
       });
     } else {
       /* Adjust subanalysis coords. */
-      const wfBBoxCoords = getWFBBoxCoords(an.children.values()[0], 0);
+      const wfBBoxCoords = getWFBBoxCoords(an.children.values()[0], cell, 0);
       an.children.values()
       .sort((a, b) => a.y - b.y)
       .forEach((san, i) => {
@@ -4745,7 +4525,7 @@ function showAllWorkflows () {
     }
 
     /* Adjust analysis bounding box. */
-    const anBBoxCoords = getABBoxCoords(an, 0);
+    const anBBoxCoords = getABBoxCoords(an, cell, 0);
     d3.selectAll('#BBoxId-' + an.autoId + ', #aBBClipId-' + an.autoId)
       .selectAll('rect')
       .attr('width', anBBoxCoords.x.max - anBBoxCoords.x.min)
@@ -4823,7 +4603,7 @@ function showAllSubanalyses () {
     });
 
     /* Adjust analysis bounding box. */
-    const anBBoxCoords = getABBoxCoords(an, 0);
+    const anBBoxCoords = getABBoxCoords(an, cell, 0);
     d3.selectAll('#BBoxId-' + an.autoId + ', #aBBClipId-' + an.autoId)
       .selectAll('rect')
       .attr('width', vis.cell.width)
@@ -5267,68 +5047,6 @@ function handleEvents (graph) {
 }
 
 /**
- * Compute doi weight based on analysis start time.
- * @param aNodes Analysis nodes.
- */
-function initDoiTimeComponent (aNodes) {
-  let min = d3.time.format.iso(new Date(0));
-  let max = d3.time.format.iso(new Date(0));
-
-  if (aNodes.length > 1) {
-    min = d3.min(aNodes, d => parseISOTimeFormat(d.start));
-    max = d3.max(aNodes, d => parseISOTimeFormat(d.start));
-  }
-
-  const doiTimeScale = d3.time.scale()
-    .domain([min, max])
-    .range([0.0, 1.0]);
-
-  aNodes.forEach(an => {
-    an.doi.initTimeComponent(doiTimeScale(parseISOTimeFormat(an.start)));
-    an.children.values().forEach(san => {
-      san.doi.initTimeComponent(doiTimeScale(parseISOTimeFormat(an.start)));
-      san.children.values().forEach(n => {
-        n.doi.initTimeComponent(doiTimeScale(parseISOTimeFormat(an.start)));
-      });
-    });
-  });
-
-  vis.graph.lNodes.values().forEach(l => {
-    l.doi.initTimeComponent(
-      d3.mean(
-        l.children.values(), an => doiTimeScale(parseISOTimeFormat(an.start))
-      )
-    );
-  });
-}
-
-/**
- * Compute doi weight based on nodes initially set as filtered.
- * @param lNodes Layer nodes.
- */
-function initDoiFilterComponent (lNodes) {
-  lNodes.values().forEach(ln => {
-    ln.filtered = true;
-    ln.doi.filteredChanged();
-
-    ln.children.values().forEach(an => {
-      an.filtered = true;
-      an.doi.filteredChanged();
-
-      an.children.values().forEach(san => {
-        san.filtered = true;
-        san.doi.filteredChanged();
-
-        san.children.values().forEach(n => {
-          n.filtered = true;
-          n.doi.filteredChanged();
-        });
-      });
-    });
-  });
-}
-
-/**
  * Compute doi weight based on the motif diff.
  * @param lNodes Layer nodes.
  * @param aNodes Analysis nodes.
@@ -5370,19 +5088,6 @@ function initDoiLayerDiffComponent (lNodes, aNodes) {
 }
 
 /**
- * Concats an array of dom elements.
- * @param domArr An array of dom class selector strings.
- */
-function concatDomClassElements (domArr) {
-  let domClassStr = '';
-  domArr.forEach(d => {
-    domClassStr += '.' + d + ',';
-  });
-
-  return d3.selectAll(domClassStr.substr(0, domClassStr.length - 1));
-}
-
-/**
  * Main render module function.
  * @param provVis The provenance visualization root object.
  */
@@ -5403,7 +5108,7 @@ function runRenderPrivate (provVis) {
 
   timeColorScale = createAnalysistimeColorScale(vis.graph.aNodes,
     ['white', 'black']);
-  initDoiTimeComponent(vis.graph.aNodes);
+  initDoiTimeComponent(vis.graph.aNodes, vis);
 
   /* Init all nodes filtered. */
   initDoiFilterComponent(vis.graph.lNodes);
@@ -5418,7 +5123,7 @@ function runRenderPrivate (provVis) {
   updateAnalysisLinks(vis.graph);
 
   /* Draw layer nodes and links. */
-  dagreLayerLayout(vis.graph);
+  dagreLayerLayout(vis.graph, vis.cell, updateNodeAndLink);
   vis.canvas.append('g').classed('lLinks', true);
   vis.canvas.append('g').classed('layers', true);
   updateLayerLinks(vis.graph.lLinks);
@@ -5438,8 +5143,8 @@ function runRenderPrivate (provVis) {
   domNodeset = concatDomClassElements(['lNode', 'aNode', 'saNode', 'node']);
 
   /* Add dragging behavior to nodes. */
-  applyDragBehavior(layer);
-  applyDragBehavior(analysis);
+  applyDragBehavior(layer, dragStart, dragging, dragEnd);
+  applyDragBehavior(analysis, dragStart, dragging, dragEnd);
 
   /* Initiate doi. */
   vis.graph.aNodes.forEach(an => {
