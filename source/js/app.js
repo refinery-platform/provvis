@@ -7,7 +7,7 @@ import init from './init';
 import layout from './layout';
 import * as models from './models';
 import motifs from './motifs';
-import render from './render';
+import * as render from './render';
 
 /**
  * The refinery provenance graph visualization.
@@ -456,7 +456,7 @@ function runProvVisPrivate (studyUuid, studyAnalyses, solrResponse) {
  * about attribute filter changed.
  */
 function runProvVisUpdatePrivate (solrResponse) {
-  render.runRenderUpdate(vis, solrResponse);
+  render.update(vis, solrResponse);
 }
 
 /**
